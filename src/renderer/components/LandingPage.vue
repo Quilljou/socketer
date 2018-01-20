@@ -1,6 +1,6 @@
 <template>
   <div id="wrapper">
-    <p class="title">TCP server</p>
+    <p class="title">TCP Client</p>
     <el-form ref="server" :model="server" label-width="80px">
       <el-form-item label="服务器">
         <el-input v-model="server.host"></el-input>
@@ -9,7 +9,7 @@
         <el-input v-model="server.port"></el-input>
       </el-form-item>
       <el-form-item>
-        <el-radio disabled v-model="isTryReconnect">断线重连</el-radio>
+        <el-checkbox disabled v-model="isTryReconnect">断线重连</el-checkbox>
       </el-form-item>
       <el-form-item>
           <el-button v-if="!connected" type="primary" @click="connectServer" :disabled="!isAbleConnect">连接</el-button>
@@ -19,31 +19,51 @@
     <p class="title">Req</p>
     <el-form ref="server" :model="server" label-width="80px">
       <el-form-item>
+        <div class="text-right">
+          {{ byteLength || 0 }}字节
+        </div>
         <el-input type="textarea" v-model="message" :disabled="!isAbleWrite"></el-input>
       </el-form-item>
       <el-form-item>
-        <el-radio disabled >16进制发送</el-radio>
+        <el-checkbox  v-model="isHexWrite" disabled>16进制发送</el-checkbox>
       </el-form-item>
       <el-form-item>
         <el-button type="primary" @click="sendMessage" :disabled="!isAbleSend">发送</el-button>
-         <el-button  @click="clearMessage" :disabled="!isMessageNotEmpty">清空</el-button>
+        <el-button  @click="clearMessage" :disabled="!isMessageNotEmpty">清空</el-button>
       </el-form-item>
     </el-form>
     <p class="title">Res</p>
     <div class="res">
-      <el-row v-for="(item,index) in res" style="margin-bottom: 10px">
-        <el-col :push="2" :span="8">
-          <el-button type="danger" @click="clearRes(index)" size="mini">清除</el-button>
-          &nbsp;
-          &nbsp;
-          {{ index + 1}}.
-          {{ item.time | dateFormat }}
-        </el-col>
-        <el-col :span="9">
-          {{ item.data.toString('hex').toUpperCase() }}
-        </el-col>
-      </el-row>
+      <div class="res-list">
+        <div v-for="(item,index) in res"
+         class="res-item">
+          <div class="res-index" >
+            {{ index + 1}}.
+            {{ item.time | dateFormat }}
+          </div>
+          <div class="res-data">
+              <div class="data">
+                  {{ item.data.toString('hex').toUpperCase() }}
+                <!-- {{ item.data }} -->
+              </div>
+            <div class="button-wrap">
+              <el-button size="mini" @click="clearRes(index)" type="danger" icon="el-icon-delete" round>
+                <!-- 清除 -->
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <el-form>
+        <el-form-item>
+          <el-checkbox  v-model="isHexShow" disabled>16进制显示</el-checkbox>
+        </el-form-item>
+        <el-form-item>
+          <el-button  @click="emptyRes"  :disabled="isResEmpty">清空</el-button>
+        </el-form-item>
+      </el-form>
     </div>
+
   </div>
 </template>
 
@@ -86,6 +106,7 @@ export default {
     })
 
     client.on('data',(data) => {
+      console.log(data.toString('hex'));
       this.res.push({
         data: data,
         time: Date.now()
@@ -103,7 +124,13 @@ export default {
       },
       message: '',
       isTryReconnect: true,
+      // res: [{
+      //   time: Date.now(),
+      //   data: '57656C636F6D6520746F20746865204173796E63536F636B6574204563686F205365727665720D0A57656C636F6D6520746F20746865204173796E63536F636B6574204563686F205365727665720D0A'
+      // }],
       res: [],
+      isHexWrite: true,
+      isHexShow: true
     }
   },
   filters: {
@@ -123,11 +150,22 @@ export default {
     },
     isAbleSend() {
       return this.isAbleWrite && this.isMessageNotEmpty;
+    },
+    isResEmpty() {
+      return this.res.length <= 0;
+    },
+    byteLength() {
+      let strLength = this.message.trim().length;
+      return this.isHexWrite ? Math.floor(strLength / 2) : Math.floor(strLength / 8);
     }
   },
   methods: {
     sendMessage() {
-      this.client.sendMessage(this.message);
+      let message = this.message;
+      // if(!this.isHexWrite) {
+      //   message = parseInt(message,2).toString(16)
+      // }
+      this.client.sendMessage(message);
     },
     clearMessage() {
       this.message = '';
@@ -145,6 +183,10 @@ export default {
         }
         return true;
       })
+    },
+
+    emptyRes() {
+      this.res = [];
     }
   }
 }
@@ -170,6 +212,9 @@ export default {
       );
     height: 100%;
     padding: 60px 80px;
+    width: 100%;
+    color: #999;
+    overflow: scroll;
   }
 
   #logo {
@@ -183,12 +228,59 @@ export default {
     justify-content: space-between;
   }
 
+  .text-right {
+    text-align: right;
+  }
+
+
   main > div { flex-basis: 50%; }
 
   .left-side {
     display: flex;
     flex-direction: column;
   }
+
+  .res {
+    margin-left: 80px;
+    width: auto;
+  }
+
+  .res-list {
+    background: white;
+    min-height: 60px;
+    border: 1px solid #ddd;
+    padding: 10px 8px;
+  }
+
+  .res-item {
+    display: flex;
+    margin-bottom: 10px;
+    align-items: center
+  }
+
+  .res-index {
+    min-width: 180px;
+  }
+
+  .res-data {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .res-data .data{
+    flex: 1;
+    text-align: left;
+    word-break: break-all;
+  }
+
+  .res-data .button-wrap{
+    width: 100px;
+    text-align: center;
+  }
+
+
 
   .welcome {
     color: #555;
