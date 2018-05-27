@@ -8,7 +8,8 @@ class TcpClient extends EventEmitter{
     this.client = null;
   }
   sendMessage(message) {
-    this.client.write(Buffer.from(message,'hex'));
+    message = message.split(' ').join('')
+    let flushed = this.client.write(Buffer.from(message,'hex'));
   }
 
   connect({ host, port }) {

@@ -16,6 +16,28 @@
          <el-button v-else type="danger" @click="disConnectServer">断开连接</el-button>
       </el-form-item>
     </el-form>
+
+    <p class="title">
+      存储的请求
+    </p>
+    <el-form label-width="80px">
+      <el-form-item >
+        <span @click="() => handleTagClick(tag)"
+          :key="tag.id"
+           v-for="tag in savedRequests"
+           class="tag-span"
+           v-if="savedRequests.length">
+          <el-tag
+            closable
+            @close.prevent="() => handleTagCloseClick(tag)"
+            >
+              {{tag.name}}
+          </el-tag>
+        </span>
+        <span v-else>無</span>
+      </el-form-item>
+    </el-form>
+
     <p class="title">Req</p>
     <el-form ref="server" :model="server" label-width="80px">
       <el-form-item>
@@ -30,6 +52,9 @@
       <el-form-item>
         <el-button type="primary" @click="sendMessage" :disabled="!isAbleSend">发送</el-button>
         <el-button  @click="clearMessage" :disabled="!isMessageNotEmpty">清空</el-button>
+        <el-button  @click="openReqModal" :disabled="!isMessageNotEmpty" v-if="reqType === 'create'">保存请求</el-button>
+        <el-button  @click="openReqModal" :disabled="!isMessageNotEmpty" v-else>更新请求</el-button>
+        <el-button  @click="newMessage">新增请求</el-button>
       </el-form-item>
     </el-form>
     <p class="title">Res</p>
@@ -63,17 +88,21 @@
         </el-form-item>
       </el-form>
     </div>
-
+    <saverequest-modal :visible.sync="dialogVisible" @modalSure="handleSure" :name.sync="currentReq.name || ''"/>
   </div>
 </template>
 
 <script>
 import TcpClient from '../service/tcpClient';
 import util  from '../utils/util';
+import collect from '../service/collect'
+import SavedRequest from '../domain/SavedRequest'
+import SaveRequestModal from './SaveRequestModal.vue'
 
 export default {
   name: 'landing-page',
   mounted() {
+    console.log(collect.list());
     const h = this.$createElement;
     let client = new TcpClient();
     this.client = client;
@@ -130,7 +159,10 @@ export default {
       // }],
       res: [],
       isHexWrite: true,
-      isHexShow: true
+      isHexShow: true,
+      dialogVisible: false,
+      savedRequests: collect.list(),
+      currentReq: {}
     }
   },
   filters: {
@@ -155,16 +187,17 @@ export default {
       return this.res.length <= 0;
     },
     byteLength() {
-      let strLength = this.message.trim().length;
+      let strLength = this.message.trim().split(' ').join('').length;
       return this.isHexWrite ? Math.floor(strLength / 2) : Math.floor(strLength / 8);
+    },
+    reqType() {
+      return this.currentReq.id ? 'update' : 'create'
     }
   },
+
   methods: {
     sendMessage() {
       let message = this.message;
-      // if(!this.isHexWrite) {
-      //   message = parseInt(message,2).toString(16)
-      // }
       this.client.sendMessage(message);
     },
     clearMessage() {
@@ -172,6 +205,27 @@ export default {
     },
     connectServer() {
       this.client.connect(this.server);
+    },
+    openReqModal() {
+      this.dialogVisible = true
+    },
+    saveMessage(name) {
+      const msg = new SavedRequest()
+      msg.data = this.message
+      msg.name = name
+      collect.create(msg)
+      this.refreshReq()
+    },
+    updateMessage(name) {
+      const msg = new SavedRequest()
+      msg.id = this.currentReq.id
+      msg.name = name
+      msg.data = this.message
+      collect.update(msg)
+      this.refreshReq()
+    },
+    refreshReq() {
+      this.savedRequests = collect.list()
     },
     disConnectServer() {
       this.client.disconnect()
@@ -187,7 +241,30 @@ export default {
 
     emptyRes() {
       this.res = [];
+    },
+
+    handleTagCloseClick(data) {
+      collect.delete(data.id)
+      this.refreshReq()
+    },
+    handleTagClick(data) {
+      if(!this.isAbleWrite) return
+      this.currentReq = data
+    },
+    handleSure(name) {
+      this.reqType === 'edit' ?  this.updateMessage(name) : this.saveMessage(name)
+    },
+    newMessage() {
+      this.currentReq = {}
     }
+  },
+  watch: {
+    currentReq(){
+      this.message = this.currentReq.data || ''
+    }
+  },
+  components: {
+    'saverequest-modal': SaveRequestModal
   }
 }
 </script>
@@ -281,7 +358,6 @@ export default {
   }
 
 
-
   .welcome {
     color: #555;
     font-size: 23px;
@@ -293,6 +369,10 @@ export default {
     font-size: 20px;
     font-weight: bold;
     margin-bottom: 6px;
+  }
+
+  .saved {
+    padding: 10px 20px;
   }
 
   .title.alt {
@@ -323,4 +403,10 @@ export default {
     color: #42b983;
     background-color: transparent;
   }
+
+  .tag-span {
+    margin-right: 8px;
+  }
+
+
 </style>
